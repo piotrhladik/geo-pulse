@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSubscriptionByEmail, ensureUser } from "@/lib/subscription";
+
+export const dynamic = "force-dynamic";
 
 /**
  * GET /api/subscription?email=user@example.com
@@ -20,6 +21,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    const { getSubscriptionByEmail } = await import("@/lib/subscription");
     const subscription = await getSubscriptionByEmail(email);
 
     if (!subscription) {
@@ -61,6 +63,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const { ensureUser } = await import("@/lib/subscription");
     const user = await ensureUser(body.email, body.name);
 
     if (!user) {

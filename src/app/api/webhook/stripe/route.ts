@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
-import { db } from "@/db";
 import { users, audits } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import type Stripe from "stripe";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 /**
  * Stripe Webhook Handler
@@ -104,6 +104,12 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   }
 
   try {
+    if (!process.env.DATABASE_URL) {
+      throw new Error("DATABASE_URL is required to process Stripe webhooks");
+    }
+
+    const { db } = await import("@/db");
+
     // 1. Create or update user with Pro status
     const existingUsers = await db
       .select()

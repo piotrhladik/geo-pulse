@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { gemini, GEMINI_MODEL, buildAuditPrompt, parseGeminiResponse, isGeminiConfigured } from "@/lib/gemini";
 import { runGeoAudit } from "@/lib/geo-engine";
 import { auditRequestSchema } from "@/lib/validators";
-import { db } from "@/db";
 import { audits } from "@/db/schema";
 import type { GeoAuditResult } from "@/types/geo";
 
 export const maxDuration = 60; // Allow up to 60s for AI processing
+export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
   try {
@@ -85,16 +85,22 @@ export async function POST(request: NextRequest) {
 
     // Store audit in database (best-effort)
     try {
-      await db.insert(audits).values({
-        siteUrl: normalizedUrl,
-        brandName,
-        geoScore: result.geoScore,
-        status: "completed",
-        gaps: result.gaps,
-        recommendations: result.recommendations,
-        jsonLdSchema: result.jsonLdSchema,
-        aiSummary: result.aiSummary,
-      });
+      if (process.env.DATABASE_URL) {
+        const { db } = await import("@/db");
+
+        await db.insert(audits).values({
+          siteUrl: normalizedUrl,
+          brandName,
+          geoScore: result.geoScore,
+          status: "completed",
+          gaps: result.gaps,
+          recommendations: result.recommendations,
+          jsonLdSchema: result.jsonLdSchema,
+          aiSummary: result.aiSummary,
+        });
+      } else {
+        console.warn("[API/audit] DATABASE_URL missing; skipping audit persistence");
+      }
     } catch (dbErr) {
       console.error("[API/audit] DB insert failed (non-fatal):", dbErr);
     }
