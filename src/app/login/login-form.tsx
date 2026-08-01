@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
@@ -11,15 +11,34 @@ type AuthMode = "sign-in" | "sign-up";
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
+function getSupabaseClient() {
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return {
+      client: null,
+      error: "Authentication is not configured. Add the Supabase public environment variables and try again.",
+    };
+  }
+
+  try {
+    const parsedUrl = new URL(supabaseUrl);
+    if (parsedUrl.protocol !== "https:" && parsedUrl.protocol !== "http:") {
+      throw new Error("Supabase URL must use HTTP or HTTPS.");
+    }
+
+    return {
+      client: createClient(supabaseUrl, supabaseAnonKey),
+      error: null,
+    };
+  } catch {
+    return {
+      client: null,
+      error: "Authentication is not configured correctly. NEXT_PUBLIC_SUPABASE_URL must be a valid HTTP or HTTPS URL.",
+    };
+  }
+}
+
 export function LoginForm() {
   const router = useRouter();
-  const supabase = useMemo(
-    () =>
-      supabaseUrl && supabaseAnonKey
-        ? createClient(supabaseUrl, supabaseAnonKey)
-        : null,
-    []
-  );
   const [mode, setMode] = useState<AuthMode>("sign-in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -29,15 +48,16 @@ export function LoginForm() {
   const [success, setSuccess] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!supabase) return;
+    const { client } = getSupabaseClient();
+    if (!client) return;
 
     const redirectAuthenticatedUser = async () => {
-      const { data, error: sessionError } = await supabase.auth.getSession();
+      const { data, error: sessionError } = await client.auth.getSession();
       if (!sessionError && data.session) router.replace("/dashboard");
     };
 
     void redirectAuthenticatedUser();
-  }, [router, supabase]);
+  }, [router]);
 
   const changeMode = (nextMode: AuthMode) => {
     setMode(nextMode);
@@ -66,15 +86,16 @@ export function LoginForm() {
       return;
     }
 
-    if (!supabase) {
-      setError("Authentication is not configured. Add the Supabase public environment variables and try again.");
+    const { client, error: configError } = getSupabaseClient();
+    if (!client) {
+      setError(configError);
       return;
     }
 
     setLoading(true);
     try {
       if (mode === "sign-in") {
-        const { error: signInError } = await supabase.auth.signInWithPassword({
+        const { error: signInError } = await client.auth.signInWithPassword({
           email: normalizedEmail,
           password,
         });
@@ -85,7 +106,7 @@ export function LoginForm() {
         return;
       }
 
-      const { data, error: signUpError } = await supabase.auth.signUp({
+      const { data, error: signUpError } = await client.auth.signUp({
         email: normalizedEmail,
         password,
       });
